@@ -1,12 +1,15 @@
 #include <SPI.h>
-//#include <MFRC522.h>
 #include <M5Stack.h>
-
 #include <MFRC522v2.h>
 #include <MFRC522DriverSPI.h>
 #include <MFRC522DriverPinSimple.h>
 #include <MFRC522Debug.h>
 #include <MFRC522Constants.h>
+
+#include "AudioFileSourceSD.h"
+#include "AudioFileSourceID3.h"
+#include "AudioGeneratorMP3.h"
+#include "AudioOutputI2S.h"
 
 #define SS_1_PIN        21 //10         // Configurable, take a unused pin, only HIGH/LOW required, must be different to SS 2
 #define SS_2_PIN        22 //6          // Configurable, take a unused pin, only HIGH/LOW required, must be different to SS 1
@@ -31,18 +34,19 @@ MFRC522DriverSPI driver_2{ss_2_pin, hspi, spiSettings};
 
 MFRC522 readers[]{driver_1, driver_2};   // Create MFRC522 instance.
 
-//
-//
-//MFRC522 mfrc522[NR_OF_READERS];   // Create MFRC522 instance.
+AudioGeneratorMP3 *mp3;
+AudioFileSourceSD *file;
+AudioOutputI2S *out;
+AudioFileSourceID3 *id3;
+
+String kifdata = "https://shogi.nkkuma.tokyo/animal?kif=";
 
 void setup() {
-
 
   // m5stack初期化
   M5.begin();
   // QR Code
   M5.Lcd.qrcode("content",50,10,220,6);
-
   
 //  Serial.begin(115200);   // Initialize serial communications with the PC
   while (!Serial);    // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
@@ -83,7 +87,47 @@ void loop() {
       MFRC522::PICC_Type piccType = reader.PICC_GetType(reader.uid.sak);
       Serial.println(MFRC522Debug::PICC_GetTypeName(piccType));
       nfcdata = PICC_DumpMifareUltralightToSerialArray(reader);
-      Serial.println(nfcdata);      
+      Serial.println(nfcdata);
+      if (nfcdata != "") {
+        // place
+        if (i == 0) { 
+          playMP3("/sounds/11.mp3"); 
+          kifdata += "11";
+        }
+        else if (i == 1) { 
+          playMP3("/sounds/12.mp3"); 
+          kifdata += "12";
+        }
+
+        //piece
+          
+        if (nfcdata == "enlion1") {
+          playMP3("/sounds/104.mp3");
+          kifdata += "lion,";
+        }
+        else if (nfcdata == "enlion2") {
+          playMP3("/sounds/104.mp3");
+          kifdata += "lion,";
+        }
+        else if (nfcdata == "enkirin1") {
+          playMP3("/sounds/103.mp3");
+          kifdata += "kirin,";
+        }
+        else if (nfcdata == "enkirin2") {
+          playMP3("/sounds/103.mp3");
+          kifdata += "kirin,";
+        }
+        else if (nfcdata == "enzou1") {
+          playMP3("/sounds/102.mp3");
+          kifdata += "zou,";
+        }
+        else if (nfcdata == "enzou2") {
+          playMP3("/sounds/102.mp3");
+          kifdata += "zou,";
+        }
+
+        M5.Lcd.qrcode(kifdata,50,10,220,6);
+      }
 
       // Halt PICC
       reader.PICC_HaltA();
@@ -95,6 +139,12 @@ void loop() {
     i++;
 
   } //for(uint8_t reader
+
+  M5.update();
+  if(M5.BtnA.isPressed()){
+    playMP3("/sounds/11.mp3");
+    playMP3("/sounds/101.mp3");
+  }
 
 }
 
@@ -141,4 +191,17 @@ void cutArray(byte array1[], uint8_t offset, uint8_t dataLength, byte result[]){
       result[i] = array1[offset+i];
   }
   result[dataLength] = '\0';
+}
+
+void playMP3(char *filename){
+  file = new AudioFileSourceSD(filename);
+  id3 = new AudioFileSourceID3(file);
+  out = new AudioOutputI2S(0, 1); // Output to builtInDAC
+  out->SetOutputModeMono(true);
+  out->SetGain(1.0);
+  mp3 = new AudioGeneratorMP3();
+  mp3->begin(id3, out);
+  while(mp3->isRunning()) {
+    if (!mp3->loop()) mp3->stop();
+  }
 }
